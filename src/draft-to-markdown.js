@@ -184,6 +184,14 @@ const EntityItems = {
     close: function (entity) {
       return `](${entity.data.url || entity.data.href})`;
     }
+  },
+  'IMAGE': {
+    open: function (entity) {
+      return '';
+    },
+    close: function (entity) {
+      return `![${entity['data'].alt}](${entity['data'].src})`;
+    }
   }
 }
 

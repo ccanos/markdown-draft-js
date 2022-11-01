@@ -90,6 +90,16 @@ const DefaultBlockEntities = {
         href: item.href
       }
     };
+  },
+  image: function (item) {
+    return {
+      type: 'atomic',
+      mutability: 'IMMUTABLE',
+      data: {
+        src: item.src,
+        alt: item.alt
+      }
+    };
   }
 };
 
@@ -254,6 +264,97 @@ function markdownToDraft(string, options = {}) {
       blockToModify.inlineStyleRanges = blockInlineStyleRanges;
       blockToModify.entityRanges = blockEntityRanges;
 
+      const isSoftBreak = content.includes('\n')
+      const contentsBlock = content.split('\n')
+
+      if (isSoftBreak) {
+
+        blocks = blocks.filter(item => {
+          return item.text !== content
+        })
+
+        contentsBlock.forEach((newTextBlock, index) => {
+          const lengthOfTextFirstBlock = contentsBlock[0].length + 1
+          const lengthOfAllTextPrev = contentsBlock.slice(0, index).join().length + 1
+
+          const offsetCurrent = index === 0 ? 0 : lengthOfAllTextPrev
+          const endInlineStyle = offsetCurrent + newTextBlock.length
+
+          /**
+             * ex: markdown ("**bold** _italic_\nnormal **bold** _itaclic_")
+             *  blockInlineStyleRanges =
+                  [
+                    { offset: 0, length: 4, style: 'BOLD' },
+                    { offset: 5, length: 6, style: 'ITALIC' },
+                    { offset: 19, length: 4, style: 'BOLD' },
+                    { offset: 24, length: 7, style: 'ITALIC' },
+                  ]
+             * filtered ====>
+                inlineStyleRangesFiltered =
+                  [
+                    { offset: 0, length: 4, style: 'BOLD' },
+                    { offset: 5, length: 6, style: 'ITALIC' }
+                  ]
+                  [
+                    { offset: 19, length: 4, style: 'BOLD' },
+                    { offset: 24, length: 7, style: 'ITALIC' }
+                  ]
+            */
+          const inlineStyleRangesFiltered = blockInlineStyleRanges.filter(item => item.offset >= offsetCurrent && item.offset <= endInlineStyle)
+
+          const entityRangesFiltered = blockEntityRanges.filter(
+            (item1) =>item1.offset >= offsetCurrent && item1.offset <= endInlineStyle)
+
+          const offsetBlockPrev = index === 0 ? lengthOfTextFirstBlock : lengthOfAllTextPrev
+
+          blocks.push({
+            depth: 0,
+            type: 'unstyled',
+            text: newTextBlock,
+            entityRanges: index === 0 ? entityRangesFiltered : entityRangesFiltered.map((inlineStyle) => {
+              return {
+                ...inlineStyle,
+                offset: inlineStyle.offset - offsetBlockPrev
+              }
+            }),
+            /**
+             * ex: markdown ("**bold** _italic_\nnormal **bold** _itaclic_")
+              * inlineStyleRangesFiltered =
+                 block 1:
+                  [
+                    { offset: 0, length: 4, style: 'BOLD' },
+                    { offset: 5, length: 6, style: 'ITALIC' }
+                  ]
+                 block 2:
+                  [
+                    { offset: 19, length: 4, style: 'BOLD' },
+                    { offset: 24, length: 7, style: 'ITALIC' }
+                  ]
+              convert =====>
+              * inlineStyleRanges =
+                 block 1:
+                  [
+                    { offset: 0, length: 4, style: 'BOLD' },
+                    { offset: 5, length: 6, style: 'ITALIC' }
+                  ]
+                 block 2:
+                  [
+                    { offset: 7, length: 4, style: 'BOLD' },
+                    { offset: 12, length: 7, style: 'ITALIC' }
+                  ]
+            */
+            inlineStyleRanges: index === 0 ? inlineStyleRangesFiltered : inlineStyleRangesFiltered.map((inlineStyle) => {
+              return {
+                ...inlineStyle,
+                offset: inlineStyle.offset - offsetBlockPrev
+              }
+            })
+          })
+
+        })
+
+      }
+
       // The entity map is a master object separate from the block so just add any entities created for this block to the master object
       Object.assign(entityMap, blockEntities);
     } else if ((itemType.indexOf('_open') !== -1 || itemType === 'fence' || itemType === 'hr' || itemType === 'htmlblock') && BlockTypes[itemType]) {
@@ -300,6 +401,8 @@ function markdownToDraft(string, options = {}) {
         }
         blocks.push(block);
       }
+    } else if (itemType === 'hardbreak') {
+      blocks.push(DefaultBlockTypes.paragraph_open());
     }
 
   });
