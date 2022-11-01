@@ -190,7 +190,7 @@ const EntityItems = {
       return '';
     },
     close: function (entity) {
-      return `![${entity['data'].alt}](${entity['data'].src})`;
+      return `![${entity['data'].alt ? entity['data'].alt : ''}](${entity['data'].src})`;
     }
   }
 }
